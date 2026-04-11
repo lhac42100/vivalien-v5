@@ -16,8 +16,14 @@ export default function AdminPage() {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState({ text: "", type: "success" });
+
+  // Create user form
   const [showCreate, setShowCreate] = useState(false);
   const [nu, setNu] = useState({ name: "", email: "", password: "", role: "companion", seniorName: "", seniorAddress: "", formulaId: "essentiel", companionId: "" });
+
+  // Create visit form
+  const [showCreateVisit, setShowCreateVisit] = useState(false);
+  const [nv, setNv] = useState({ familyId: "", companionId: "", date: "", time: "09:00", duration: 3, formula: "Essentiel" });
 
   const load = async () => {
     setLoading(true);
@@ -32,236 +38,366 @@ export default function AdminPage() {
 
   useEffect(() => { load(); }, []);
 
-  const flash = (text, type = "success") => { setMsg({ text, type }); setTimeout(() => setMsg({ text: "", type: "success" }), 3000); };
+  const flash = (text, type) => { setMsg({ text, type: type || "success" }); setTimeout(() => setMsg({ text: "", type: "success" }), 3000); };
 
+  // CREATE USER
   const createUser = async () => {
     if (!nu.name || !nu.email || !nu.password) { flash("Tous les champs requis", "error"); return; }
     try {
       await adminCreateUser(nu.email, nu.password, nu);
       setNu({ name: "", email: "", password: "", role: "companion", seniorName: "", seniorAddress: "", formulaId: "essentiel", companionId: "" });
       setShowCreate(false);
-      flash("✅ Utilisateur créé !");
+      flash("Utilisateur cree !");
       await load();
     } catch (e) { flash(e.message, "error"); }
   };
 
+  // DELETE USER
   const handleDeleteUser = async (uid) => {
     if (uid === user.id) return;
-    try { await FS.deleteUser(uid); flash("Utilisateur supprimé"); await load(); }
+    try { await FS.deleteUser(uid); flash("Utilisateur supprime"); await load(); }
     catch (e) { flash(e.message, "error"); }
   };
 
+  // CREATE VISIT
+  const createVisit = async () => {
+    if (!nv.familyId || !nv.companionId || !nv.date) { flash("Famille, compagnon et date requis", "error"); return; }
+    try {
+      await FS.createVisit({
+        familyId: nv.familyId,
+        companionId: nv.companionId,
+        date: nv.date,
+        time: nv.time,
+        duration: Number(nv.duration),
+        formula: nv.formula,
+        status: "scheduled"
+      });
+      setNv({ familyId: "", companionId: "", date: "", time: "09:00", duration: 3, formula: "Essentiel" });
+      setShowCreateVisit(false);
+      flash("Visite planifiee !");
+      await load();
+    } catch (e) { flash(e.message, "error"); }
+  };
+
+  // DELETE VISIT
+  const handleDeleteVisit = async (id) => {
+    try {
+      await FS.updateVisit(id, { status: "cancelled" });
+      flash("Visite annulee");
+      await load();
+    } catch (e) { flash(e.message, "error"); }
+  };
+
+  // EXPORT
   const handleExport = () => {
-    let csv = "Date,Senior,Compagnon,Durée,Formule,Statut,Arrivée,Départ,Humeur,Forme\n";
-    visits.forEach(v => {
-      const fam = users.find(u => u.id === v.familyId);
-      const comp = users.find(u => u.id === v.companionId);
-      const proof = proofs.find(p => p.visitId === v.id);
-      csv += `${v.date},${fam?.seniorName || ""},${comp?.name || ""},${v.duration}h,${v.formula},${v.status},${proof?.checkIn?.time || ""},${proof?.checkOut?.time || ""},${proof?.observations?.mood || ""},${proof?.observations?.physical || ""}\n`;
+    var csv = "Date,Senior,Compagnon,Duree,Formule,Statut,Arrivee,Depart,Humeur,Forme\n";
+    visits.forEach(function(v) {
+      var fam = users.find(function(u) { return u.id === v.familyId; });
+      var comp = users.find(function(u) { return u.id === v.companionId; });
+      var proof = proofs.find(function(p) { return p.visitId === v.id; });
+      csv += v.date + "," + (fam && fam.seniorName ? fam.seniorName : "") + "," + (comp && comp.name ? comp.name : "") + "," + v.duration + "h," + v.formula + "," + v.status + "," + (proof && proof.checkIn ? proof.checkIn.time : "") + "," + (proof && proof.checkOut ? proof.checkOut.time : "") + "," + (proof && proof.observations ? proof.observations.mood : "") + "," + (proof && proof.observations ? proof.observations.physical : "") + "\n";
     });
     exportToCSV(csv, "vivalien_export.csv");
   };
 
-  const companions = users.filter(u => u.role === "companion");
-  const families = users.filter(u => u.role === "family");
-  const totalCA = invoices.reduce((a, i) => a + (i.amount || 0), 0);
-  const pendingCA = invoices.filter(i => i.status === "pending").reduce((a, i) => a + (i.amount || 0), 0);
-  const completedVisits = visits.filter(v => v.status === "completed").length;
-  const scheduledVisits = visits.filter(v => v.status === "scheduled").length;
-  const unreadAlerts = alerts.filter(a => !a.read).length;
+  var companions = users.filter(function(u) { return u.role === "companion"; });
+  var families = users.filter(function(u) { return u.role === "family"; });
+  var totalCA = invoices.reduce(function(a, i) { return a + (i.amount || 0); }, 0);
+  var pendingCA = invoices.filter(function(i) { return i.status === "pending"; }).reduce(function(a, i) { return a + (i.amount || 0); }, 0);
+  var completedVisits = visits.filter(function(v) { return v.status === "completed"; }).length;
+  var scheduledVisits = visits.filter(function(v) { return v.status === "scheduled"; }).length;
+  var unreadAlerts = alerts.filter(function(a) { return !a.read; }).length;
+  var activeVisits = visits.filter(function(v) { return v.status !== "cancelled"; });
 
-  const tabList = [
-    { id: "dash", icon: "📊", label: "Dashboard", color: COLORS.purple },
-    { id: "users", icon: "👥", label: "Utilisateurs", color: COLORS.purple },
-    { id: "visits", icon: "📋", label: "Visites", color: COLORS.purple },
-    { id: "proofs", icon: "✅", label: "Preuves", color: COLORS.purple },
-    { id: "invoices", icon: "💰", label: "Facturation", color: COLORS.purple },
-    { id: "alerts", icon: "🚨", label: "Alertes", color: COLORS.purple, badge: unreadAlerts }
+  var tabList = [
+    { id: "dash", icon: "\ud83d\udcca", label: "Dashboard", color: COLORS.purple },
+    { id: "users", icon: "\ud83d\udc65", label: "Utilisateurs", color: COLORS.purple },
+    { id: "visits", icon: "\ud83d\udccb", label: "Visites", color: COLORS.purple },
+    { id: "proofs", icon: "\u2705", label: "Preuves", color: COLORS.purple },
+    { id: "invoices", icon: "\ud83d\udcb0", label: "Facturation", color: COLORS.purple },
+    { id: "alerts", icon: "\ud83d\udea8", label: "Alertes", color: COLORS.purple, badge: unreadAlerts }
   ];
 
-  if (loading) return <><Header title="Vivalien Admin" sub={`Bonjour ${user.name}`} color={COLORS.purple} colorD={COLORS.purpleD} onLogout={logout} /><Loading /></>;
+  if (loading) return React.createElement(React.Fragment, null,
+    React.createElement(Header, { title: "Vivalien Admin", sub: "Bonjour " + user.name, color: COLORS.purple, colorD: COLORS.purpleD, onLogout: logout }),
+    React.createElement(Loading, null)
+  );
 
   return (
     <div style={{ minHeight: "100vh", background: COLORS.bg, fontFamily: "'DM Sans',sans-serif" }}>
-      <Header title="Vivalien Admin" sub={`Bonjour ${user.name}`} color={COLORS.purple} colorD={COLORS.purpleD} onLogout={logout} />
+      <Header title="Vivalien Admin" sub={"Bonjour " + user.name} color={COLORS.purple} colorD={COLORS.purpleD} onLogout={logout} />
       <Tabs tabs={tabList} active={tab} onChange={setTab} />
       <Message text={msg.text} type={msg.type} />
 
       <div style={{ padding: 24, maxWidth: 960, margin: "0 auto" }}>
 
-        {/* DASHBOARD */}
-        {tab === "dash" && <>
-          <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-            <Stat icon="💰" value={`${totalCA}€`} label="CA total" color={COLORS.purple} />
-            <Stat icon="⏳" value={`${pendingCA}€`} label="En attente" color={COLORS.warn} />
-            <Stat icon="✅" value={completedVisits} label="Visites faites" color={COLORS.success} />
-            <Stat icon="📅" value={scheduledVisits} label="Planifiées" color={COLORS.blue} />
-          </div>
-          <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-            <Stat icon="🤝" value={companions.length} label="Compagnons" color={COLORS.green} />
-            <Stat icon="👨‍👩‍👧" value={families.length} label="Familles" color={COLORS.blue} />
-            <Stat icon="📊" value={completedVisits > 0 ? (totalCA / completedVisits).toFixed(0) + "€" : "—"} label="CA/visite" color={COLORS.purple} />
-            <Stat icon="📈" value={companions.length > 0 ? (completedVisits / companions.length).toFixed(1) : "—"} label="Visites/comp." color={COLORS.orange} />
-          </div>
-          <Card>
-            <h3 style={{ margin: "0 0 12px", fontSize: 15, color: COLORS.purpleD }}>Taux de remplissage</h3>
-            {companions.map(co => {
-              const n = visits.filter(v => v.companionId === co.id && v.status === "completed").length;
-              const pct = Math.round(n / 40 * 100);
-              return (
-                <div key={co.id} style={{ marginBottom: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
-                    <span style={{ fontWeight: 600 }}>{co.name}</span>
-                    <span style={{ color: COLORS.sub }}>{n}/40 ({pct}%)</span>
-                  </div>
-                  <div style={{ height: 8, background: COLORS.brd, borderRadius: 4, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: pct > 75 ? COLORS.success : pct > 40 ? COLORS.warn : COLORS.danger, borderRadius: 4 }} />
-                  </div>
-                </div>
+        {/* ======== DASHBOARD ======== */}
+        {tab === "dash" && React.createElement(React.Fragment, null,
+          React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" } },
+            React.createElement(Stat, { icon: "\ud83d\udcb0", value: totalCA + "\u20ac", label: "CA total", color: COLORS.purple }),
+            React.createElement(Stat, { icon: "\u23f3", value: pendingCA + "\u20ac", label: "En attente", color: COLORS.warn }),
+            React.createElement(Stat, { icon: "\u2705", value: completedVisits, label: "Visites faites", color: COLORS.success }),
+            React.createElement(Stat, { icon: "\ud83d\udcc5", value: scheduledVisits, label: "Planifiees", color: COLORS.blue })
+          ),
+          React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" } },
+            React.createElement(Stat, { icon: "\ud83e\udd1d", value: companions.length, label: "Compagnons", color: COLORS.green }),
+            React.createElement(Stat, { icon: "\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67", value: families.length, label: "Familles", color: COLORS.blue }),
+            React.createElement(Stat, { icon: "\ud83d\udcca", value: completedVisits > 0 ? Math.round(totalCA / completedVisits) + "\u20ac" : "\u2014", label: "CA/visite", color: COLORS.purple }),
+            React.createElement(Stat, { icon: "\ud83d\udcc8", value: companions.length > 0 ? (completedVisits / companions.length).toFixed(1) : "\u2014", label: "Visites/comp.", color: COLORS.orange })
+          ),
+          React.createElement(Card, null,
+            React.createElement("h3", { style: { margin: "0 0 12px", fontSize: 15, color: COLORS.purpleD } }, "Taux de remplissage"),
+            companions.map(function(co) {
+              var n = visits.filter(function(v) { return v.companionId === co.id && v.status === "completed"; }).length;
+              var pct = Math.round(n / 40 * 100);
+              return React.createElement("div", { key: co.id, style: { marginBottom: 10 } },
+                React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 } },
+                  React.createElement("span", { style: { fontWeight: 600 } }, co.name),
+                  React.createElement("span", { style: { color: COLORS.sub } }, n + "/40 (" + pct + "%)")
+                ),
+                React.createElement("div", { style: { height: 8, background: COLORS.brd, borderRadius: 4, overflow: "hidden" } },
+                  React.createElement("div", { style: { height: "100%", width: Math.min(pct, 100) + "%", background: pct > 75 ? COLORS.success : pct > 40 ? COLORS.warn : COLORS.danger, borderRadius: 4 } })
+                )
               );
-            })}
-          </Card>
-          <button onClick={handleExport} style={{ ...btnStyle, background: COLORS.purple, color: "#FFF", width: "100%", marginTop: 8 }}>📥 Exporter (CSV)</button>
-        </>}
+            })
+          ),
+          React.createElement("button", { onClick: handleExport, style: { ...btnStyle, background: COLORS.purple, color: "#FFF", width: "100%", marginTop: 8 } }, "\ud83d\udce5 Exporter (CSV)")
+        )}
 
-        {/* USERS */}
-        {tab === "users" && <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h2 style={{ margin: 0, color: COLORS.purpleD, fontSize: 18 }}>Utilisateurs ({users.length})</h2>
-            <button onClick={() => setShowCreate(!showCreate)} style={{ ...btnStyle, background: COLORS.purple, color: "#FFF", fontSize: 13 }}>+ Créer</button>
-          </div>
-          {showCreate && <Card style={{ border: `2px solid ${COLORS.purpleM}` }}>
-            <h3 style={{ margin: "0 0 14px", color: COLORS.purpleD, fontSize: 15 }}>Nouvel utilisateur</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <div><label style={{ fontSize: 11, fontWeight: 600, color: COLORS.sub }}>Nom</label><input value={nu.name} onChange={e => setNu({ ...nu, name: e.target.value })} style={inputStyle} placeholder="Marie Dupont" /></div>
-              <div><label style={{ fontSize: 11, fontWeight: 600, color: COLORS.sub }}>Email</label><input value={nu.email} onChange={e => setNu({ ...nu, email: e.target.value })} style={inputStyle} placeholder="marie@vivalien.fr" /></div>
-              <div><label style={{ fontSize: 11, fontWeight: 600, color: COLORS.sub }}>Mot de passe</label><input value={nu.password} onChange={e => setNu({ ...nu, password: e.target.value })} type="password" style={inputStyle} /></div>
-              <div><label style={{ fontSize: 11, fontWeight: 600, color: COLORS.sub }}>Rôle</label><select value={nu.role} onChange={e => setNu({ ...nu, role: e.target.value })} style={{ ...inputStyle, cursor: "pointer" }}><option value="companion">Compagnon</option><option value="family">Famille</option></select></div>
-              {nu.role === "family" && <>
-                <div><label style={{ fontSize: 11, fontWeight: 600, color: COLORS.sub }}>Nom du senior</label><input value={nu.seniorName} onChange={e => setNu({ ...nu, seniorName: e.target.value })} style={inputStyle} /></div>
-                <div><label style={{ fontSize: 11, fontWeight: 600, color: COLORS.sub }}>Adresse senior</label><input value={nu.seniorAddress} onChange={e => setNu({ ...nu, seniorAddress: e.target.value })} style={inputStyle} /></div>
-                <div><label style={{ fontSize: 11, fontWeight: 600, color: COLORS.sub }}>Formule</label><select value={nu.formulaId} onChange={e => setNu({ ...nu, formulaId: e.target.value })} style={{ ...inputStyle, cursor: "pointer" }}>{FORMULAS.map(f => <option key={f.id} value={f.id}>{f.name} — {f.frequency}</option>)}</select></div>
-                <div><label style={{ fontSize: 11, fontWeight: 600, color: COLORS.sub }}>Compagnon</label><select value={nu.companionId} onChange={e => setNu({ ...nu, companionId: e.target.value })} style={{ ...inputStyle, cursor: "pointer" }}><option value="">— Choisir —</option>{companions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-              </>}
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
-              <button onClick={() => setShowCreate(false)} style={{ ...btnStyle, background: "#F3F2EF", color: COLORS.txt, fontSize: 13 }}>Annuler</button>
-              <button onClick={createUser} style={{ ...btnStyle, background: COLORS.purple, color: "#FFF", fontSize: 13 }}>Créer</button>
-            </div>
-          </Card>}
-          {users.map(u => (
-            <Card key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, background: u.role === "admin" ? COLORS.purpleL : u.role === "companion" ? COLORS.greenL : COLORS.blueL }}>
-                  {u.role === "admin" ? "👑" : u.role === "companion" ? "🤝" : "👨‍👩‍👧"}
-                </div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{u.name}</div>
-                  <div style={{ fontSize: 12, color: COLORS.sub }}>{u.email}{u.seniorName ? ` — ${u.seniorName}` : ""}</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: u.role === "admin" ? COLORS.purpleL : u.role === "companion" ? COLORS.greenL : COLORS.blueL, color: u.role === "admin" ? COLORS.purpleD : u.role === "companion" ? COLORS.greenD : COLORS.blueD }}>
-                  {u.role === "admin" ? "Admin" : u.role === "companion" ? "Compagnon" : "Famille"}
-                </span>
-                {u.id !== user.id && <button onClick={() => handleDeleteUser(u.id)} style={{ ...btnStyle, background: COLORS.dangerL, color: COLORS.danger, padding: "4px 10px", fontSize: 11 }}>Suppr.</button>}
-              </div>
-            </Card>
-          ))}
-        </>}
-
-        {/* VISITS */}
-        {tab === "visits" && <>
-          <h2 style={{ margin: "0 0 16px", color: COLORS.purpleD, fontSize: 18 }}>Visites ({visits.length})</h2>
-          {visits.map(v => {
-            const co = users.find(u => u.id === v.companionId), fa = users.find(u => u.id === v.familyId);
-            return (
-              <Card key={v.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px" }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{fa?.seniorName || "—"}</div>
-                  <div style={{ fontSize: 12, color: COLORS.sub }}>{v.date} à {v.time} — {v.duration}h — {co?.name} — {v.formula}</div>
-                </div>
-                <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: v.status === "completed" ? COLORS.successL : v.status === "in_progress" ? COLORS.orangeL : "#F3F2EF", color: v.status === "completed" ? COLORS.success : v.status === "in_progress" ? COLORS.orange : COLORS.sub }}>
-                  {v.status === "completed" ? "Terminée" : v.status === "in_progress" ? "En cours" : "Planifiée"}
-                </span>
-              </Card>
+        {/* ======== USERS ======== */}
+        {tab === "users" && React.createElement(React.Fragment, null,
+          React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 } },
+            React.createElement("h2", { style: { margin: 0, color: COLORS.purpleD, fontSize: 18 } }, "Utilisateurs (" + users.length + ")"),
+            React.createElement("button", { onClick: function() { setShowCreate(!showCreate); }, style: { ...btnStyle, background: COLORS.purple, color: "#FFF", fontSize: 13 } }, "+ Creer")
+          ),
+          showCreate && React.createElement(Card, { style: { border: "2px solid " + COLORS.purpleM } },
+            React.createElement("h3", { style: { margin: "0 0 14px", color: COLORS.purpleD, fontSize: 15 } }, "Nouvel utilisateur"),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
+              React.createElement("div", null,
+                React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: COLORS.sub } }, "Nom"),
+                React.createElement("input", { value: nu.name, onChange: function(e) { setNu({ ...nu, name: e.target.value }); }, style: inputStyle, placeholder: "Marie Dupont" })
+              ),
+              React.createElement("div", null,
+                React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: COLORS.sub } }, "Email"),
+                React.createElement("input", { value: nu.email, onChange: function(e) { setNu({ ...nu, email: e.target.value }); }, style: inputStyle, placeholder: "marie@vivalien.fr" })
+              ),
+              React.createElement("div", null,
+                React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: COLORS.sub } }, "Mot de passe"),
+                React.createElement("input", { value: nu.password, onChange: function(e) { setNu({ ...nu, password: e.target.value }); }, type: "password", style: inputStyle })
+              ),
+              React.createElement("div", null,
+                React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: COLORS.sub } }, "Role"),
+                React.createElement("select", { value: nu.role, onChange: function(e) { setNu({ ...nu, role: e.target.value }); }, style: { ...inputStyle, cursor: "pointer" } },
+                  React.createElement("option", { value: "companion" }, "Compagnon"),
+                  React.createElement("option", { value: "family" }, "Famille")
+                )
+              ),
+              nu.role === "family" && React.createElement(React.Fragment, null,
+                React.createElement("div", null,
+                  React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: COLORS.sub } }, "Nom du senior"),
+                  React.createElement("input", { value: nu.seniorName, onChange: function(e) { setNu({ ...nu, seniorName: e.target.value }); }, style: inputStyle })
+                ),
+                React.createElement("div", null,
+                  React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: COLORS.sub } }, "Adresse senior"),
+                  React.createElement("input", { value: nu.seniorAddress, onChange: function(e) { setNu({ ...nu, seniorAddress: e.target.value }); }, style: inputStyle })
+                ),
+                React.createElement("div", null,
+                  React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: COLORS.sub } }, "Formule"),
+                  React.createElement("select", { value: nu.formulaId, onChange: function(e) { setNu({ ...nu, formulaId: e.target.value }); }, style: { ...inputStyle, cursor: "pointer" } },
+                    FORMULAS.map(function(f) { return React.createElement("option", { key: f.id, value: f.id }, f.name + " - " + f.frequency); })
+                  )
+                ),
+                React.createElement("div", null,
+                  React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: COLORS.sub } }, "Compagnon"),
+                  React.createElement("select", { value: nu.companionId, onChange: function(e) { setNu({ ...nu, companionId: e.target.value }); }, style: { ...inputStyle, cursor: "pointer" } },
+                    React.createElement("option", { value: "" }, "-- Choisir --"),
+                    companions.map(function(c) { return React.createElement("option", { key: c.id, value: c.id }, c.name); })
+                  )
+                )
+              )
+            ),
+            React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" } },
+              React.createElement("button", { onClick: function() { setShowCreate(false); }, style: { ...btnStyle, background: "#F3F2EF", color: COLORS.txt, fontSize: 13 } }, "Annuler"),
+              React.createElement("button", { onClick: createUser, style: { ...btnStyle, background: COLORS.purple, color: "#FFF", fontSize: 13 } }, "Creer")
+            )
+          ),
+          users.map(function(u) {
+            var roleIcon = u.role === "admin" ? "\ud83d\udc51" : u.role === "companion" ? "\ud83e\udd1d" : "\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67";
+            var roleBg = u.role === "admin" ? COLORS.purpleL : u.role === "companion" ? COLORS.greenL : COLORS.blueL;
+            var roleColor = u.role === "admin" ? COLORS.purpleD : u.role === "companion" ? COLORS.greenD : COLORS.blueD;
+            var roleLabel = u.role === "admin" ? "Admin" : u.role === "companion" ? "Compagnon" : "Famille";
+            return React.createElement(Card, { key: u.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px" } },
+              React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12 } },
+                React.createElement("div", { style: { width: 36, height: 36, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, background: roleBg } }, roleIcon),
+                React.createElement("div", null,
+                  React.createElement("div", { style: { fontWeight: 600, fontSize: 14 } }, u.name),
+                  React.createElement("div", { style: { fontSize: 12, color: COLORS.sub } }, u.email + (u.seniorName ? " - " + u.seniorName : ""))
+                )
+              ),
+              React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                React.createElement("span", { style: { padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: roleBg, color: roleColor } }, roleLabel),
+                u.id !== user.id && React.createElement("button", { onClick: function() { handleDeleteUser(u.id); }, style: { ...btnStyle, background: COLORS.dangerL, color: COLORS.danger, padding: "4px 10px", fontSize: 11 } }, "Suppr.")
+              )
             );
-          })}
-        </>}
+          })
+        )}
 
-        {/* PROOFS */}
-        {tab === "proofs" && <>
-          <h2 style={{ margin: "0 0 16px", color: COLORS.purpleD, fontSize: 18 }}>Preuves ({proofs.length})</h2>
-          {proofs.map(p => {
-            const co = users.find(u => u.id === p.companionId), fa = users.find(u => u.id === p.familyId);
-            return (
-              <Card key={p.id}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div><div style={{ fontWeight: 600, fontSize: 14 }}>{fa?.seniorName} — {p.date}</div><div style={{ fontSize: 12, color: COLORS.sub }}>Compagnon : {co?.name}</div></div>
-                  <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: COLORS.successL, color: COLORS.success }}>✅ Vérifiée</span>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12 }}>
-                  <div style={{ padding: 10, background: COLORS.bg, borderRadius: 8 }}><div style={{ color: COLORS.sub, fontSize: 10 }}>ARRIVÉE</div><div style={{ fontWeight: 700, fontSize: 16, color: COLORS.green }}>{p.checkIn?.time}</div><div style={{ fontSize: 10, color: COLORS.sub }}>📍 {p.checkIn?.lat?.toFixed(4)}, {p.checkIn?.lng?.toFixed(4)}</div></div>
-                  <div style={{ padding: 10, background: COLORS.bg, borderRadius: 8 }}><div style={{ color: COLORS.sub, fontSize: 10 }}>DÉPART</div><div style={{ fontWeight: 700, fontSize: 16, color: COLORS.green }}>{p.checkOut?.time}</div><div style={{ fontSize: 10, color: COLORS.sub }}>📍 {p.checkOut?.lat?.toFixed(4)}, {p.checkOut?.lng?.toFixed(4)}</div></div>
-                </div>
-                {p.observations && <div style={{ marginTop: 8, padding: 10, background: COLORS.bg, borderRadius: 8, fontSize: 12 }}>
-                  <strong>Humeur :</strong> {p.observations.mood} — <strong>Forme :</strong> {p.observations.physical}
-                  {p.observations.notes && <div style={{ marginTop: 4, color: COLORS.sub }}>{p.observations.notes}</div>}
-                  {p.observations.alerts?.length > 0 && <div style={{ marginTop: 4 }}>{p.observations.alerts.map((a, i) => <span key={i} style={{ padding: "2px 8px", background: COLORS.warnL, color: COLORS.warn, borderRadius: 12, fontSize: 11, fontWeight: 600, marginRight: 4 }}>⚠️ {a}</span>)}</div>}
-                </div>}
-              </Card>
+        {/* ======== VISITS ======== */}
+        {tab === "visits" && React.createElement(React.Fragment, null,
+          React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 } },
+            React.createElement("h2", { style: { margin: 0, color: COLORS.purpleD, fontSize: 18 } }, "Visites (" + activeVisits.length + ")"),
+            React.createElement("button", { onClick: function() { setShowCreateVisit(!showCreateVisit); }, style: { ...btnStyle, background: COLORS.purple, color: "#FFF", fontSize: 13 } }, "+ Planifier une visite")
+          ),
+
+          showCreateVisit && React.createElement(Card, { style: { border: "2px solid " + COLORS.purpleM } },
+            React.createElement("h3", { style: { margin: "0 0 14px", color: COLORS.purpleD, fontSize: 15 } }, "Nouvelle visite"),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
+              React.createElement("div", null,
+                React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: COLORS.sub } }, "Famille / Senior"),
+                React.createElement("select", { value: nv.familyId, onChange: function(e) { setNv({ ...nv, familyId: e.target.value }); }, style: { ...inputStyle, cursor: "pointer" } },
+                  React.createElement("option", { value: "" }, "-- Choisir --"),
+                  families.map(function(f) { return React.createElement("option", { key: f.id, value: f.id }, f.seniorName + " (" + f.name + ")"); })
+                )
+              ),
+              React.createElement("div", null,
+                React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: COLORS.sub } }, "Compagnon"),
+                React.createElement("select", { value: nv.companionId, onChange: function(e) { setNv({ ...nv, companionId: e.target.value }); }, style: { ...inputStyle, cursor: "pointer" } },
+                  React.createElement("option", { value: "" }, "-- Choisir --"),
+                  companions.map(function(c) { return React.createElement("option", { key: c.id, value: c.id }, c.name); })
+                )
+              ),
+              React.createElement("div", null,
+                React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: COLORS.sub } }, "Date"),
+                React.createElement("input", { type: "date", value: nv.date, onChange: function(e) { setNv({ ...nv, date: e.target.value }); }, style: inputStyle })
+              ),
+              React.createElement("div", null,
+                React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: COLORS.sub } }, "Heure"),
+                React.createElement("input", { type: "time", value: nv.time, onChange: function(e) { setNv({ ...nv, time: e.target.value }); }, style: inputStyle })
+              ),
+              React.createElement("div", null,
+                React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: COLORS.sub } }, "Duree"),
+                React.createElement("select", { value: nv.duration, onChange: function(e) { setNv({ ...nv, duration: e.target.value }); }, style: { ...inputStyle, cursor: "pointer" } },
+                  React.createElement("option", { value: 3 }, "3 heures"),
+                  React.createElement("option", { value: 4 }, "4 heures")
+                )
+              ),
+              React.createElement("div", null,
+                React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: COLORS.sub } }, "Formule"),
+                React.createElement("select", { value: nv.formula, onChange: function(e) { setNv({ ...nv, formula: e.target.value }); }, style: { ...inputStyle, cursor: "pointer" } },
+                  FORMULAS.map(function(f) { return React.createElement("option", { key: f.id, value: f.name }, f.name + " - " + f.visit3h + "\u20ac"); })
+                )
+              )
+            ),
+            React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" } },
+              React.createElement("button", { onClick: function() { setShowCreateVisit(false); }, style: { ...btnStyle, background: "#F3F2EF", color: COLORS.txt, fontSize: 13 } }, "Annuler"),
+              React.createElement("button", { onClick: createVisit, style: { ...btnStyle, background: COLORS.purple, color: "#FFF", fontSize: 13 } }, "Planifier")
+            )
+          ),
+
+          activeVisits.map(function(v) {
+            var co = users.find(function(u) { return u.id === v.companionId; });
+            var fa = users.find(function(u) { return u.id === v.familyId; });
+            var statusBg = v.status === "completed" ? COLORS.successL : v.status === "in_progress" ? COLORS.orangeL : "#F3F2EF";
+            var statusColor = v.status === "completed" ? COLORS.success : v.status === "in_progress" ? COLORS.orange : COLORS.sub;
+            var statusLabel = v.status === "completed" ? "Terminee" : v.status === "in_progress" ? "En cours" : "Planifiee";
+            return React.createElement(Card, { key: v.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px" } },
+              React.createElement("div", null,
+                React.createElement("div", { style: { fontWeight: 600, fontSize: 14 } }, fa && fa.seniorName ? fa.seniorName : "--"),
+                React.createElement("div", { style: { fontSize: 12, color: COLORS.sub } }, v.date + " a " + v.time + " - " + v.duration + "h - " + (co && co.name ? co.name : "--") + " - " + v.formula)
+              ),
+              React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                React.createElement("span", { style: { padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: statusBg, color: statusColor } }, statusLabel),
+                v.status === "scheduled" && React.createElement("button", { onClick: function() { handleDeleteVisit(v.id); }, style: { ...btnStyle, background: COLORS.dangerL, color: COLORS.danger, padding: "4px 10px", fontSize: 11 } }, "Annuler")
+              )
             );
-          })}
-        </>}
+          })
+        )}
 
-        {/* INVOICES */}
-        {tab === "invoices" && <>
-          <h2 style={{ margin: "0 0 16px", color: COLORS.purpleD, fontSize: 18 }}>Facturation</h2>
-          <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-            <Stat icon="💰" value={`${totalCA}€`} label="CA total" color={COLORS.purple} />
-            <Stat icon="✅" value={`${invoices.filter(i => i.status === "paid").reduce((a, i) => a + i.amount, 0)}€`} label="Encaissé" color={COLORS.success} />
-            <Stat icon="⏳" value={`${pendingCA}€`} label="En attente" color={COLORS.warn} />
-          </div>
-          {invoices.map(inv => {
-            const fa = users.find(u => u.id === inv.familyId);
-            return (
-              <Card key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px" }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{fa?.seniorName} — {inv.month}</div>
-                  <div style={{ fontSize: 12, color: COLORS.sub }}>{inv.formula} — {inv.visits} visites</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.purpleD }}>{inv.amount}€</div>
-                  <div style={{ fontSize: 11, color: COLORS.success }}>{inv.afterCI}€ après CI</div>
-                  <span style={{ padding: "2px 8px", borderRadius: 12, fontSize: 10, fontWeight: 600, background: inv.status === "paid" ? COLORS.successL : COLORS.warnL, color: inv.status === "paid" ? COLORS.success : COLORS.warn }}>{inv.status === "paid" ? "Payée" : "En attente"}</span>
-                </div>
-              </Card>
-            );
-          })}
-        </>}
-
-        {/* ALERTS */}
-        {tab === "alerts" && <>
-          <h2 style={{ margin: "0 0 16px", color: COLORS.purpleD, fontSize: 18 }}>Alertes</h2>
-          {alerts.map(a => (
-            <Card key={a.id} style={{ borderLeft: `4px solid ${a.read ? COLORS.brd : COLORS.danger}`, cursor: "pointer" }} onClick={() => { FS.markAlertRead(a.id); load(); }}>
-              <div style={{ fontWeight: a.read ? 400 : 600, fontSize: 13 }}>🚨 {a.message}</div>
-              <div style={{ fontSize: 11, color: COLORS.sub, marginTop: 4 }}>{a.date} à {a.time}</div>
-            </Card>
-          ))}
-          {proofs.filter(p => p.observations?.alerts?.length > 0).length > 0 && <>
-            <h3 style={{ margin: "20px 0 10px", fontSize: 15, color: COLORS.warn }}>⚠️ Alertes compagnons</h3>
-            {proofs.filter(p => p.observations?.alerts?.length > 0).map(p => {
-              const fa = users.find(u => u.id === p.familyId);
-              return (
-                <Card key={p.id} style={{ borderLeft: `4px solid ${COLORS.warn}` }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{fa?.seniorName} — {p.date}</div>
-                  {p.observations.alerts.map((a, i) => <div key={i} style={{ fontSize: 12, color: COLORS.warn, marginTop: 4 }}>⚠️ {a}</div>)}
-                </Card>
+        {/* ======== PROOFS ======== */}
+        {tab === "proofs" && React.createElement(React.Fragment, null,
+          React.createElement("h2", { style: { margin: "0 0 16px", color: COLORS.purpleD, fontSize: 18 } }, "Preuves (" + proofs.length + ")"),
+          proofs.length === 0
+            ? React.createElement(Card, { style: { textAlign: "center", padding: 40, color: COLORS.sub } }, "Aucune preuve de visite")
+            : proofs.map(function(p) {
+              var co = users.find(function(u) { return u.id === p.companionId; });
+              var fa = users.find(function(u) { return u.id === p.familyId; });
+              return React.createElement(Card, { key: p.id },
+                React.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 12 } },
+                  React.createElement("div", null,
+                    React.createElement("div", { style: { fontWeight: 600, fontSize: 14 } }, (fa ? fa.seniorName : "") + " - " + p.date),
+                    React.createElement("div", { style: { fontSize: 12, color: COLORS.sub } }, "Compagnon : " + (co ? co.name : ""))
+                  ),
+                  React.createElement("span", { style: { padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: COLORS.successL, color: COLORS.success } }, "\u2705 Verifiee")
+                ),
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12 } },
+                  React.createElement("div", { style: { padding: 10, background: COLORS.bg, borderRadius: 8 } },
+                    React.createElement("div", { style: { color: COLORS.sub, fontSize: 10 } }, "ARRIVEE"),
+                    React.createElement("div", { style: { fontWeight: 700, fontSize: 16, color: COLORS.green } }, p.checkIn ? p.checkIn.time : "--"),
+                    React.createElement("div", { style: { fontSize: 10, color: COLORS.sub } }, "\ud83d\udccd " + (p.checkIn ? p.checkIn.lat.toFixed(4) + ", " + p.checkIn.lng.toFixed(4) : "--"))
+                  ),
+                  React.createElement("div", { style: { padding: 10, background: COLORS.bg, borderRadius: 8 } },
+                    React.createElement("div", { style: { color: COLORS.sub, fontSize: 10 } }, "DEPART"),
+                    React.createElement("div", { style: { fontWeight: 700, fontSize: 16, color: COLORS.green } }, p.checkOut ? p.checkOut.time : "--"),
+                    React.createElement("div", { style: { fontSize: 10, color: COLORS.sub } }, "\ud83d\udccd " + (p.checkOut ? p.checkOut.lat.toFixed(4) + ", " + p.checkOut.lng.toFixed(4) : "--"))
+                  )
+                ),
+                p.observations && React.createElement("div", { style: { marginTop: 8, padding: 10, background: COLORS.bg, borderRadius: 8, fontSize: 12 } },
+                  React.createElement("div", null, React.createElement("strong", null, "Humeur : "), p.observations.mood, " - ", React.createElement("strong", null, "Forme : "), p.observations.physical),
+                  p.observations.notes && React.createElement("div", { style: { marginTop: 4, color: COLORS.sub } }, p.observations.notes),
+                  p.observations.alerts && p.observations.alerts.length > 0 && React.createElement("div", { style: { marginTop: 4 } },
+                    p.observations.alerts.map(function(a, i) { return React.createElement("span", { key: i, style: { padding: "2px 8px", background: COLORS.warnL, color: COLORS.warn, borderRadius: 12, fontSize: 11, fontWeight: 600, marginRight: 4 } }, "\u26a0\ufe0f " + a); })
+                  )
+                )
               );
-            })}
-          </>}
-        </>}
+            })
+        )}
+
+        {/* ======== INVOICES ======== */}
+        {tab === "invoices" && React.createElement(React.Fragment, null,
+          React.createElement("h2", { style: { margin: "0 0 16px", color: COLORS.purpleD, fontSize: 18 } }, "Facturation"),
+          React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" } },
+            React.createElement(Stat, { icon: "\ud83d\udcb0", value: totalCA + "\u20ac", label: "CA total", color: COLORS.purple }),
+            React.createElement(Stat, { icon: "\u2705", value: invoices.filter(function(i) { return i.status === "paid"; }).reduce(function(a, i) { return a + i.amount; }, 0) + "\u20ac", label: "Encaisse", color: COLORS.success }),
+            React.createElement(Stat, { icon: "\u23f3", value: pendingCA + "\u20ac", label: "En attente", color: COLORS.warn })
+          ),
+          invoices.map(function(inv) {
+            var fa = users.find(function(u) { return u.id === inv.familyId; });
+            return React.createElement(Card, { key: inv.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px" } },
+              React.createElement("div", null,
+                React.createElement("div", { style: { fontWeight: 600, fontSize: 14 } }, (fa ? fa.seniorName : "") + " - " + inv.month),
+                React.createElement("div", { style: { fontSize: 12, color: COLORS.sub } }, inv.formula + " - " + inv.visits + " visites")
+              ),
+              React.createElement("div", { style: { textAlign: "right" } },
+                React.createElement("div", { style: { fontWeight: 700, fontSize: 16, color: COLORS.purpleD } }, inv.amount + "\u20ac"),
+                React.createElement("div", { style: { fontSize: 11, color: COLORS.success } }, inv.afterCI + "\u20ac apres CI"),
+                React.createElement("span", { style: { padding: "2px 8px", borderRadius: 12, fontSize: 10, fontWeight: 600, background: inv.status === "paid" ? COLORS.successL : COLORS.warnL, color: inv.status === "paid" ? COLORS.success : COLORS.warn } }, inv.status === "paid" ? "Payee" : "En attente")
+              )
+            );
+          })
+        )}
+
+        {/* ======== ALERTS ======== */}
+        {tab === "alerts" && React.createElement(React.Fragment, null,
+          React.createElement("h2", { style: { margin: "0 0 16px", color: COLORS.purpleD, fontSize: 18 } }, "Alertes"),
+          alerts.length === 0
+            ? React.createElement(Card, { style: { textAlign: "center", padding: 40, color: COLORS.sub } }, "Aucune alerte")
+            : alerts.map(function(a) {
+              return React.createElement(Card, { key: a.id, style: { borderLeft: "4px solid " + (a.read ? COLORS.brd : COLORS.danger), cursor: "pointer" }, onClick: function() { FS.markAlertRead(a.id); load(); } },
+                React.createElement("div", { style: { fontWeight: a.read ? 400 : 600, fontSize: 13 } }, "\ud83d\udea8 " + a.message),
+                React.createElement("div", { style: { fontSize: 11, color: COLORS.sub, marginTop: 4 } }, a.date + " a " + a.time)
+              );
+            }),
+          proofs.filter(function(p) { return p.observations && p.observations.alerts && p.observations.alerts.length > 0; }).length > 0 && React.createElement(React.Fragment, null,
+            React.createElement("h3", { style: { margin: "20px 0 10px", fontSize: 15, color: COLORS.warn } }, "\u26a0\ufe0f Alertes compagnons"),
+            proofs.filter(function(p) { return p.observations && p.observations.alerts && p.observations.alerts.length > 0; }).map(function(p) {
+              var fa = users.find(function(u) { return u.id === p.familyId; });
+              return React.createElement(Card, { key: p.id, style: { borderLeft: "4px solid " + COLORS.warn } },
+                React.createElement("div", { style: { fontWeight: 600, fontSize: 13 } }, (fa ? fa.seniorName : "") + " - " + p.date),
+                p.observations.alerts.map(function(a, i) { return React.createElement("div", { key: i, style: { fontSize: 12, color: COLORS.warn, marginTop: 4 } }, "\u26a0\ufe0f " + a); })
+              );
+            })
+          )
+        )}
       </div>
     </div>
   );
