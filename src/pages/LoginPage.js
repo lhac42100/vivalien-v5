@@ -32,23 +32,6 @@ export default function LoginPage() {
     // Main content
     React.createElement("div", { style: styles.content },
 
-      // Logo
-      React.createElement("img", { src: "/logo.png", alt: "Vivalien", style: styles.logo }),
-
-      // Title
-      React.createElement("h1", { style: styles.title }, "Vivalien"),
-
-      // Slogan
-      React.createElement("p", { style: styles.slogan }, "Vivre ensemble, en toute s\u00e9curit\u00e9"),
-
-      // Badge
-      React.createElement("div", { style: styles.badge },
-        React.createElement("svg", { width: "14", height: "14", viewBox: "0 0 24 24", fill: "#5A8C69", style: { marginRight: 6 } },
-          React.createElement("path", { d: "M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM12 17c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z" })
-        ),
-        "ESPACE PROTEGE"
-      ),
-
       // Form
       React.createElement("form", { onSubmit: handleLogin, style: styles.formCard },
 
