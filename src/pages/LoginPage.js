@@ -27,7 +27,7 @@ export default function LoginPage() {
     React.createElement("div", { style: styles.content },
 
       // Spacer to push form down below the logo/title in the background image
-      React.createElement("div", { style: { height: "28vh" } }),
+      React.createElement("div", { style: { height: "34vh" } }),
 
       // Badge
       React.createElement("div", { style: styles.badge },
