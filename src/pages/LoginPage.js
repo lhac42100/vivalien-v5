@@ -22,16 +22,12 @@ export default function LoginPage() {
   };
 
   return React.createElement("div", { style: styles.container },
-
-    // Background image
     React.createElement("div", { style: styles.bgImage }),
 
-    // Overlay for readability
-    React.createElement("div", { style: styles.overlay }),
-
-    // Main content
     React.createElement("div", { style: styles.content },
 
+      // Spacer to push form down below the logo/title in the background image
+      React.createElement("div", { style: { height: "28vh" } }),
 
       // Badge
       React.createElement("div", { style: styles.badge },
@@ -96,7 +92,7 @@ var styles = {
   container: {
     minHeight: "100vh",
     display: "flex",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
     fontFamily: "'DM Sans', sans-serif",
     position: "relative",
@@ -110,18 +106,9 @@ var styles = {
     bottom: 0,
     backgroundImage: "url(/bg-login.png)",
     backgroundSize: "cover",
-    backgroundPosition: "center",
+    backgroundPosition: "center top",
     backgroundRepeat: "no-repeat",
     zIndex: 0
-  },
-  overlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: "rgba(255,255,255,0.15)",
-    zIndex: 1
   },
   content: {
     position: "relative",
@@ -132,28 +119,6 @@ var styles = {
     width: "100%",
     maxWidth: 420,
     padding: "0 20px"
-  },
-  logo: {
-    width: 90,
-    height: "auto",
-    marginBottom: 6,
-    filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.15))"
-  },
-  title: {
-    fontSize: 46,
-    fontWeight: 800,
-    color: "#2E7D32",
-    margin: "0 0 2px",
-    letterSpacing: -1,
-    textShadow: "0 2px 8px rgba(255,255,255,0.8)"
-  },
-  slogan: {
-    fontSize: 17,
-    color: "#444",
-    margin: "0 0 16px",
-    fontWeight: 500,
-    fontStyle: "italic",
-    textShadow: "0 1px 4px rgba(255,255,255,0.9)"
   },
   badge: {
     display: "flex",
