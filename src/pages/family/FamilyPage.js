@@ -82,7 +82,7 @@ export default function FamilyPage() {
       body: JSON.stringify({ name: roomName, properties: { exp: Math.floor(Date.now() / 1000) + 3600, enable_prejoin_ui: true } })
     });
     const data = await resp.json();
-    return data.url;
+    return data.url + "?lang=fr";
   };
 
   const handleStartVideoCall = async (visit) => {
