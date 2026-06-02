@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { Header, Tabs, Card, Stat, Loading } from "../../components/UI";
-import { COLORS, FORMULAS, MOODS } from "../../utils/constants";
+import { Header, Tabs, Card, Stat, Loading, VideoCallModal, IncomingCallBanner } from "../../components/UI";
+import { COLORS, FORMULAS, MOODS, btnStyle } from "../../utils/constants";
+import { getNow } from "../../utils/helpers";
 import * as FS from "../../services/firestore";
 
 export default function FamilyPage() {
@@ -13,6 +14,10 @@ export default function FamilyPage() {
   const [notifs, setNotifs] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [videoCallRoom, setVideoCallRoom] = useState(null);
+  const [videoCallId, setVideoCallId] = useState(null);
+  const [videoCallName, setVideoCallName] = useState("");
+  const [incomingCall, setIncomingCall] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -40,6 +45,76 @@ export default function FamilyPage() {
       await FS.markNotificationRead(n.id);
     }
     load();
+  };
+
+  // Ecouter les appels vidéo entrants
+  useEffect(() => {
+    if (!user || !user.id) return;
+    const unsub = FS.onVideoCallIncoming(user.id, (calls) => {
+      if (calls.length > 0) {
+        const call = calls[0];
+        const caller = users.find(u => u.id === call.callerId);
+        setIncomingCall({ ...call, callerDisplayName: caller ? caller.name : "Compagnon" });
+      } else {
+        setIncomingCall(null);
+      }
+    });
+    return () => unsub();
+  }, [user, users]);
+
+  // Surveiller la fin d'appel par l'autre côté
+  useEffect(() => {
+    if (!videoCallId) return;
+    const unsub = FS.onVideoCallUpdated(videoCallId, (call) => {
+      if (call.status === "ended") {
+        setVideoCallRoom(null);
+        setVideoCallId(null);
+        setVideoCallName("");
+      }
+    });
+    return () => unsub();
+  }, [videoCallId]);
+
+  const handleStartVideoCall = async (visit) => {
+    const roomName = "vivalien-" + visit.id + "-" + Date.now();
+    const roomUrl = "https://vivalien.daily.co/" + roomName;
+    const comp = users.find(u => u.id === visit.companionId);
+    const callId = await FS.createVideoCall({
+      visitId: visit.id,
+      callerId: user.id,
+      callerName: user.name || user.seniorName,
+      targetId: visit.companionId,
+      targetName: comp ? comp.name : "",
+      roomUrl: roomUrl,
+      roomName: roomName
+    });
+    setVideoCallId(callId);
+    setVideoCallRoom(roomUrl);
+    setVideoCallName(comp ? comp.name : "Compagnon");
+  };
+
+  const handleAcceptCall = async () => {
+    if (!incomingCall) return;
+    await FS.updateVideoCall(incomingCall.id, { status: "active" });
+    setVideoCallId(incomingCall.id);
+    setVideoCallRoom(incomingCall.roomUrl);
+    setVideoCallName(incomingCall.callerDisplayName || "Compagnon");
+    setIncomingCall(null);
+  };
+
+  const handleDeclineCall = async () => {
+    if (!incomingCall) return;
+    await FS.updateVideoCall(incomingCall.id, { status: "declined" });
+    setIncomingCall(null);
+  };
+
+  const handleLeaveCall = async () => {
+    if (videoCallId) {
+      await FS.updateVideoCall(videoCallId, { status: "ended" });
+    }
+    setVideoCallRoom(null);
+    setVideoCallId(null);
+    setVideoCallName("");
   };
 
   const tabList = [
@@ -108,6 +183,13 @@ export default function FamilyPage() {
                 <span style={{ fontWeight: 700, color: COLORS.blueD }}>Visite en cours</span>
               </div>
               <div style={{ fontSize: 13, color: COLORS.sub, marginTop: 6 }}>{companion?.name} est avec {user.seniorName}</div>
+              <button onClick={() => handleStartVideoCall(v)} style={{
+                ...btnStyle, width: "100%", marginTop: 12, padding: "14px 16px",
+                background: COLORS.blue, color: "#FFF", fontSize: 14,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+              }}>
+                📹 Appeler en vidéo
+              </button>
             </Card>
           ))}
 
@@ -191,6 +273,21 @@ export default function FamilyPage() {
             ))}
         </>}
       </div>
+
+      {/* VIDEO CALL MODAL */}
+      {videoCallRoom && <VideoCallModal
+        roomUrl={videoCallRoom}
+        callerName={videoCallName}
+        onLeave={handleLeaveCall}
+      />}
+
+      {/* INCOMING CALL BANNER */}
+      {incomingCall && !videoCallRoom && <IncomingCallBanner
+        callerName={incomingCall.callerDisplayName || "Compagnon"}
+        onAccept={handleAcceptCall}
+        onDecline={handleDeclineCall}
+      />}
+
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
     </div>
   );
