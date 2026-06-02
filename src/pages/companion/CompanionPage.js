@@ -123,10 +123,20 @@ export default function CompanionPage() {
     return function() { unsub(); };
   }, [videoCallId]);
 
+  var createDailyRoom = async function(roomName) {
+    var resp = await fetch("https://api.daily.co/v1/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer 58fade76e307cf8524ea22c2dc66e21ba7962630b40751082206e481e0684f83" },
+      body: JSON.stringify({ name: roomName, properties: { exp: Math.floor(Date.now() / 1000) + 3600, enable_prejoin_ui: true } })
+    });
+    var data = await resp.json();
+    return data.url;
+  };
+
   var handleStartVideoCall = async function() {
     if (!activeVisit) return;
-    var roomName = "vivalien-" + activeVisit.id + "-" + Date.now();
-    var roomUrl = "https://vivalien.daily.co/" + roomName;
+    var roomName = "viv-" + activeVisit.id.slice(0, 6) + "-" + Date.now();
+    var roomUrl = await createDailyRoom(roomName);
     var fa = getFam(activeVisit.familyId);
     var callId = await FS.createVideoCall({
       visitId: activeVisit.id,
