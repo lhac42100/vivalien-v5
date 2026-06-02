@@ -1,7 +1,7 @@
 import { db, storage } from "./firebase";
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-  query, where, orderBy, addDoc, serverTimestamp
+  query, where, orderBy, addDoc, serverTimestamp, onSnapshot
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
@@ -146,4 +146,38 @@ export async function createAlert(data) {
 
 export async function markAlertRead(id) {
   await updateDoc(doc(db, "alerts", id), { read: true });
+}
+
+// ============ VIDEO CALLS ============
+export async function createVideoCall(data) {
+  var r = await addDoc(collection(db, "videoCalls"), {
+    ...data,
+    status: "ringing",
+    createdAt: serverTimestamp()
+  });
+  return r.id;
+}
+
+export async function updateVideoCall(id, data) {
+  await updateDoc(doc(db, "videoCalls", id), data);
+}
+
+export function onVideoCallIncoming(userId, callback) {
+  var q = query(
+    collection(db, "videoCalls"),
+    where("targetId", "==", userId),
+    where("status", "==", "ringing")
+  );
+  return onSnapshot(q, function(snap) {
+    var calls = snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+    callback(calls);
+  });
+}
+
+export function onVideoCallUpdated(callId, callback) {
+  return onSnapshot(doc(db, "videoCalls", callId), function(snap) {
+    if (snap.exists()) {
+      callback({ id: snap.id, ...snap.data() });
+    }
+  });
 }
