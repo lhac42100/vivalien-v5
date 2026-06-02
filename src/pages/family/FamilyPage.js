@@ -75,9 +75,19 @@ export default function FamilyPage() {
     return () => unsub();
   }, [videoCallId]);
 
+  const createDailyRoom = async (roomName) => {
+    const resp = await fetch("https://api.daily.co/v1/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer 58fade76e307cf8524ea22c2dc66e21ba7962630b40751082206e481e0684f83" },
+      body: JSON.stringify({ name: roomName, properties: { exp: Math.floor(Date.now() / 1000) + 3600, enable_prejoin_ui: true } })
+    });
+    const data = await resp.json();
+    return data.url;
+  };
+
   const handleStartVideoCall = async (visit) => {
-    const roomName = "vivalien-" + visit.id + "-" + Date.now();
-    const roomUrl = "https://vivalien.daily.co/" + roomName;
+    const roomName = "viv-" + visit.id.slice(0, 6) + "-" + Date.now();
+    const roomUrl = await createDailyRoom(roomName);
     const comp = users.find(u => u.id === visit.companionId);
     const callId = await FS.createVideoCall({
       visitId: visit.id,
