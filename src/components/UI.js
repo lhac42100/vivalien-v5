@@ -138,6 +138,70 @@ export function SignaturePad({ onSave, onCancel }) {
   );
 }
 
+// ============ VIDEO CALL MODAL ============
+export function VideoCallModal({ roomUrl, callerName, onLeave }) {
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+      background: "#000", zIndex: 9999, display: "flex", flexDirection: "column"
+    }}>
+      <div style={{
+        padding: "10px 20px", background: "rgba(0,0,0,0.8)",
+        display: "flex", justifyContent: "space-between", alignItems: "center"
+      }}>
+        <div style={{ color: "#FFF", fontSize: 14, fontWeight: 600 }}>
+          📹 Appel vidéo — {callerName}
+        </div>
+        <button onClick={onLeave} style={{
+          ...btnStyle, background: COLORS.danger, color: "#FFF",
+          padding: "8px 20px", fontSize: 13
+        }}>
+          Raccrocher
+        </button>
+      </div>
+      <iframe
+        src={roomUrl}
+        style={{ flex: 1, border: "none", width: "100%", height: "100%" }}
+        allow="camera; microphone; fullscreen; display-capture; autoplay"
+        title="Vivalien Video Call"
+      />
+    </div>
+  );
+}
+
+// ============ INCOMING CALL BANNER ============
+export function IncomingCallBanner({ callerName, onAccept, onDecline }) {
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, zIndex: 9998,
+      background: "linear-gradient(135deg, #1565C0, #0D47A1)",
+      padding: 20, boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+      animation: "slideDown 0.3s ease-out"
+    }}>
+      <div style={{ textAlign: "center", color: "#FFF", marginBottom: 12 }}>
+        <div style={{ fontSize: 32, marginBottom: 8 }}>📹</div>
+        <div style={{ fontSize: 16, fontWeight: 700 }}>Appel vidéo entrant</div>
+        <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>{callerName}</div>
+      </div>
+      <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+        <button onClick={onDecline} style={{
+          ...btnStyle, background: COLORS.danger, color: "#FFF",
+          padding: "14px 32px", fontSize: 15, borderRadius: 50
+        }}>
+          ✕ Refuser
+        </button>
+        <button onClick={onAccept} style={{
+          ...btnStyle, background: COLORS.success, color: "#FFF",
+          padding: "14px 32px", fontSize: 15, borderRadius: 50
+        }}>
+          ✓ Répondre
+        </button>
+      </div>
+      <style>{`@keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }`}</style>
+    </div>
+  );
+}
+
 // ============ OBSERVATION FORM ============
 export function ObservationForm({ seniorName, onSave }) {
   const MOODS = ["😊 Très bien", "🙂 Bien", "😐 Neutre", "😟 Préoccupant", "😢 Inquiétant"];
