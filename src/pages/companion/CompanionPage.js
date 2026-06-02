@@ -130,7 +130,7 @@ export default function CompanionPage() {
       body: JSON.stringify({ name: roomName, properties: { exp: Math.floor(Date.now() / 1000) + 3600, enable_prejoin_ui: true } })
     });
     var data = await resp.json();
-    return data.url;
+    return data.url + "?lang=fr";
   };
 
   var handleStartVideoCall = async function() {
