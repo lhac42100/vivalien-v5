@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { Header, Tabs, Card, Loading, SignaturePad, ObservationForm } from "../../components/UI";
+import { Header, Tabs, Card, Loading, SignaturePad, ObservationForm, VideoCallModal, IncomingCallBanner } from "../../components/UI";
 import { COLORS, btnStyle } from "../../utils/constants";
 import { getGeoLocation, getNow } from "../../utils/helpers";
 import * as FS from "../../services/firestore";
@@ -75,6 +75,10 @@ export default function CompanionPage() {
   var [photos, setPhotos] = useState([]);
   var [uploadingPhotos, setUploadingPhotos] = useState(false);
   var [loading, setLoading] = useState(true);
+  var [videoCallRoom, setVideoCallRoom] = useState(null);
+  var [videoCallId, setVideoCallId] = useState(null);
+  var [videoCallName, setVideoCallName] = useState("");
+  var [incomingCall, setIncomingCall] = useState(null);
 
   var load = async function() {
     setLoading(true);
@@ -90,6 +94,83 @@ export default function CompanionPage() {
   };
 
   useEffect(function() { load(); }, []);
+
+  // Ecouter les appels vidéo entrants
+  useEffect(function() {
+    if (!user || !user.id) return;
+    var unsub = FS.onVideoCallIncoming(user.id, function(calls) {
+      if (calls.length > 0) {
+        var call = calls[0];
+        var caller = users.find(function(u) { return u.id === call.callerId; });
+        setIncomingCall({ ...call, callerDisplayName: caller ? caller.name : "Famille" });
+      } else {
+        setIncomingCall(null);
+      }
+    });
+    return function() { unsub(); };
+  }, [user, users]);
+
+  // Surveiller la fin d'appel par l'autre côté
+  useEffect(function() {
+    if (!videoCallId) return;
+    var unsub = FS.onVideoCallUpdated(videoCallId, function(call) {
+      if (call.status === "ended") {
+        setVideoCallRoom(null);
+        setVideoCallId(null);
+        setVideoCallName("");
+      }
+    });
+    return function() { unsub(); };
+  }, [videoCallId]);
+
+  var handleStartVideoCall = async function() {
+    if (!activeVisit) return;
+    var roomName = "vivalien-" + activeVisit.id + "-" + Date.now();
+    var roomUrl = "https://vivalien.daily.co/" + roomName;
+    var fa = getFam(activeVisit.familyId);
+    var callId = await FS.createVideoCall({
+      visitId: activeVisit.id,
+      callerId: user.id,
+      callerName: user.name,
+      targetId: activeVisit.familyId,
+      targetName: fa ? fa.name : "",
+      roomUrl: roomUrl,
+      roomName: roomName
+    });
+    await FS.createNotification({
+      familyId: activeVisit.familyId,
+      type: "video_call",
+      message: user.name + " vous appelle en vidéo",
+      time: getNow()
+    });
+    setVideoCallId(callId);
+    setVideoCallRoom(roomUrl);
+    setVideoCallName(fa ? fa.seniorName || fa.name : "Famille");
+  };
+
+  var handleAcceptCall = async function() {
+    if (!incomingCall) return;
+    await FS.updateVideoCall(incomingCall.id, { status: "active" });
+    setVideoCallId(incomingCall.id);
+    setVideoCallRoom(incomingCall.roomUrl);
+    setVideoCallName(incomingCall.callerDisplayName || "Famille");
+    setIncomingCall(null);
+  };
+
+  var handleDeclineCall = async function() {
+    if (!incomingCall) return;
+    await FS.updateVideoCall(incomingCall.id, { status: "declined" });
+    setIncomingCall(null);
+  };
+
+  var handleLeaveCall = async function() {
+    if (videoCallId) {
+      await FS.updateVideoCall(videoCallId, { status: "ended" });
+    }
+    setVideoCallRoom(null);
+    setVideoCallId(null);
+    setVideoCallName("");
+  };
 
   var today = visits.filter(function(v) { return v.status === "scheduled" || v.status === "in_progress"; });
   var history = visits.filter(function(v) { return v.status === "completed"; });
@@ -245,7 +326,10 @@ export default function CompanionPage() {
 
         React.createElement(Card, null,
           React.createElement("h3", { style: { margin: "0 0 10px", fontSize: 15 } }, "Actions"),
-          React.createElement("div", { style: { padding: "10px 14px", background: COLORS.greenL, borderRadius: 10, fontSize: 13, marginBottom: 6 } }, "\ud83d\udcf9 Lancer l'appel video avec la famille"),
+          React.createElement("button", {
+            onClick: handleStartVideoCall,
+            style: { ...btnStyle, width: "100%", padding: "14px 14px", background: COLORS.blueL, color: COLORS.blueD, fontSize: 13, marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }
+          }, "\ud83d\udcf9 Lancer l'appel vid\u00e9o avec la famille"),
           React.createElement("div", { style: { padding: "10px 14px", background: COLORS.greenL, borderRadius: 10, fontSize: 13 } }, "\ud83d\udcdd Rediger le compte-rendu")
         ),
 
@@ -293,7 +377,21 @@ export default function CompanionPage() {
           React.createElement("p", { style: { fontWeight: 600, color: COLORS.txt } }, "Envoi des photos en cours..."),
           React.createElement("p", { style: { fontSize: 13, color: COLORS.sub } }, "Veuillez patienter")
         )
-      )
+      ),
+
+      // VIDEO CALL MODAL
+      videoCallRoom && React.createElement(VideoCallModal, {
+        roomUrl: videoCallRoom,
+        callerName: videoCallName,
+        onLeave: handleLeaveCall
+      }),
+
+      // INCOMING CALL BANNER
+      incomingCall && !videoCallRoom && React.createElement(IncomingCallBanner, {
+        callerName: incomingCall.callerDisplayName || "Famille",
+        onAccept: handleAcceptCall,
+        onDecline: handleDeclineCall
+      })
     ),
     React.createElement("style", null, "@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}} @keyframes spin{to{transform:rotate(360deg)}}")
   );
